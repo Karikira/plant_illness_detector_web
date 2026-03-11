@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - Plant Disease Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; }
+  </style>
+</head>
+<body class="bg-green-50 text-gray-800">
+
+<!-- NAVBAR -->
+<nav class="bg-green-700 shadow-md p-4 flex justify-between items-center">
+  <h1 class="text-white text-2xl font-bold">🌱 Dashboard</h1>
+  <button id="logoutBtn" class="bg-white text-green-700 px-4 py-2 rounded-full font-semibold hover:bg-green-100">
+    Logout
+  </button>
+</nav>
+
+<!-- DASHBOARD CONTENT -->
+<section class="max-w-6xl mx-auto px-6 py-12">
+  <h2 id="welcomeMsg" class="text-3xl font-bold text-green-700 mb-6">Welcome!</h2>
+  <p class="text-gray-700 mb-8">
+    Here you can upload plant images, view results, and track detected diseases.
+  </p>
+
+  <!-- Placeholder for future features -->
+  <div class="bg-white p-6 rounded-lg shadow-md">
+    <p class="text-gray-600">Feature placeholders: Upload Images, AI Analysis, Results.</p>
+  </div>
+</section>
+
+<script>
+// Get user email from sessionStorage
+const userEmail = sessionStorage.getItem("userEmail");
+const welcomeMsg = document.getElementById("welcomeMsg");
+
+if (!userEmail) {
+  // If no user, redirect back to login
+  window.location.href = "index.html";
+} else {
+  welcomeMsg.textContent = `Welcome, ${userEmail}!`;
+}
+
+// Logout
+document.getElementById("logoutBtn").onclick = () => {
+  sessionStorage.removeItem("userEmail");
+  window.location.href = "index.html";
+};
+</script>
+
+</body>
+</html>

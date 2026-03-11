@@ -1,0 +1,129 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tenant Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/png" href="Pictures/logo.png">
+</head>
+
+<script>
+const token = localStorage.getItem("token");
+
+if (!token) {
+  window.location.href = "/";
+}
+</script>
+
+<body class="bg-[#0f0c29] text-white font-sans">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-[#1a1a2e] text-white shadow-lg flex flex-col justify-between">
+      <div>
+        <div class="p-4 border-b border-[#0ff]">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-gradient-to-tr from-purple-500 to-cyan-400 text-white flex items-center justify-center rounded-full text-lg font-bold">👨🏻‍💼</div>
+            <div>
+<div class="font-semibold text-cyan-400">Welcome <span id="username"></span>
+</div>
+              <div class="text-sm text-gray-400"></div>
+            </div>
+          </div>
+        </div>
+        <nav class="mt-4 px-4 space-y-2 text-sm">
+          <a href="tenant_dashboard.php" class="flex items-center gap-3 px-3 py-2 rounded-md bg-gradient-to-r from-[#0f0c29] to-[#302b63] text-cyan-300 hover:bg-opacity-80">
+            <span>📊</span> Dashboard
+          </a>
+          <a href="tenant_rental_details.php" class="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <span>🗂️</span> Profile
+          </a>
+          <a href="tenant_inbox.php" class="flex items-center justify-between px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <div class="flex items-center gap-3">
+              <span>📩</span> Inbox
+            </div>
+           
+           
+          </a>
+          <a href="tenant_outbox.php" class="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <span>📤</span> Outbox
+          </a>
+        
+          <a href="tenant_bills.php" class="flex items-center justify-between px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <div class="flex items-center gap-3">
+              <span>🧾</span> Bills
+            </div>
+            
+          </a>
+    
+          <a href="tenant_payments.php" class="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <span>💳</span> Payments
+          </a>
+          <a href="tenant_service.php" class="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <span>💬</span> Chat/Service
+          </a>
+
+          <a href="tenant_feedback.php" class="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <span>💬</span> Feedback
+          </a>
+
+           <a href="tenant_online_payment.php" class="flex items-center gap-3 px-3 py-2 rounded-md text-gray-300 hover:bg-[#16213e]">
+            <span>💬</span> Online Payment
+          </a>
+        
+        </nav>
+      </div>
+      <div class="p-4 text-sm">
+        <form action="logout.php" method="POST" onsubmit="return confirm('Are you sure?');">
+<button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">
+  Logout
+</button>
+
+<script>
+function logout() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user_name");
+  window.location.href = "/";
+}
+</script>
+        </form>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 overflow-y-auto bg-[#0f0c29]">
+      <div class="mb-6">
+        <h1 class="text-xl font-bold text-cyan-400">📌 Welcome back!</h1>
+        <p class="text-gray-400 text-sm"><?= date("l, M jS Y"); ?></p>
+      </div>
+
+      <!-- Dashboard Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
+        <div class="bg-gradient-to-br from-[#1f4068] to-[#2c3e50] p-4 rounded-xl shadow-lg border border-cyan-400">
+          <div class="text-sm text-cyan-300">Pending Bill</div>
+          <div class="text-2xl font-extrabold mt-1 text-white">₱<?= number_format((float)$totalBill, 2); ?></div>
+        </div>
+
+        <div class="bg-gradient-to-br from-[#1f4068] to-[#2c3e50] p-4 rounded-xl shadow-lg border border-cyan-400">
+          <div class="text-sm text-cyan-300">Payments Completed</div>
+          <div class="text-2xl font-extrabold mt-1 text-white"><?= $paymentsCompleted; ?></div>
+        </div>
+
+        <div class="bg-gradient-to-br from-[#1f4068] to-[#2c3e50] p-4 rounded-xl shadow-lg border border-cyan-400">
+          <div class="text-sm text-cyan-300">Total Bills Paid</div>
+          <div class="text-2xl font-extrabold mt-1 text-white">₱<?= number_format((float)$totalPaid, 2); ?></div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+</body>
+
+<script>
+document.getElementById("username").innerText =
+  localStorage.getItem("user_name");
+</script>
+
+</html>

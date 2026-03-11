@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLANT DISEASE DETECTOR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="icon" type="image/png" href="Pictures/logo.png">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+ 
+</head>
+
+<body class="bg-gray-100 text-gray-800 font-poppins">
+
+<!------------------------------------------------------------------------>
+<nav class="fixed w-full z-50 bg-green-700 shadow-md">
+  <div class="max-w-7xl mx-auto px-6 py-4 relative flex items-center">
+
+    <div class="flex space-x-6 text-white font-semibold" data-aos="fade-right">
+      <a href="#home" class="hover:text-green-200">Home</a>
+      <a href="#about" class="hover:text-green-200">About</a>
+      <a href="#how" class="hover:text-green-200">How It Works</a>
+      <a href="#contact" class="hover:text-green-200">Contact</a>
+    </div>
+
+    <div class="absolute left-1/2 transform -translate-x-1/2">
+      <h1 class="text-white text-2xl md:text-3xl font-bold tracking-tight" data-aos="fade-down">
+         Plant Disease Detector
+      </h1>
+    </div>
+
+    <div class="ml-auto" data-aos="fade-left">
+      <button id="openModalBtn"
+        class="bg-white text-green-700 px-4 py-2 rounded-full font-semibold hover:bg-green-100 transition">
+        Login
+      </button>
+    </div>
+
+  </div>
+</nav>
+
+<!------------------------------------------------------------------------>
+<section id="home"
+  class="h-screen pt-24 flex items-center justify-center bg-cover bg-center"
+  style="background-image:url('https://images.unsplash.com/photo-1501004318641-b39e6451bec6');">
+
+  <div class="bg-black bg-opacity-60 p-10 rounded-xl text-center max-w-2xl" data-aos="zoom-in">
+    <h2 class="text-4xl md:text-5xl font-extrabold leading-tight text-white mb-6">
+      Detect Plant Diseases Instantly
+    </h2>
+    <p class="text-lg md:text-xl font-medium text-green-100 mb-8">
+      An AI-powered system that helps farmers and gardeners identify plant diseases
+      using image-based analysis.
+    </p>
+    <button
+      class="bg-gradient-to-r from-green-500 to-green-700 text-white px-8 py-3 rounded-full font-semibold shadow-lg hover:scale-105 transition">
+      Learn More
+    </button>
+  </div>
+</section>
+
+<!------------------------------------------------------------------------>
+<section id="about" class="py-20 bg-white">
+  <div class="max-w-6xl mx-auto px-6 text-center" data-aos="fade-down">
+    <h2 class="text-3xl font-semibold text-green-700 mb-6">
+      About the Project
+    </h2>
+    <p class="text-gray-600 max-w-3xl mx-auto text-lg">
+      The Plant Disease Detector uses AI to analyze plant images and identify diseases
+      early to prevent crop damage.
+    </p>
+  </div>
+</section>
+
+<section id="how" class="py-20 bg-green-50">
+  <div class="max-w-6xl mx-auto px-6 text-center">
+    <h2 class="text-3xl font-semibold text-green-700 mb-12" data-aos="fade-down">
+      How It Works
+    </h2>
+    <div class="grid md:grid-cols-4 gap-6 text-lg font-medium" data-aos="zoom-in">
+      <div class="bg-white p-6 rounded-lg shadow">1️⃣ Login</div>
+      <div class="bg-white p-6 rounded-lg shadow">2️⃣ Upload Image</div>
+      <div class="bg-white p-6 rounded-lg shadow">3️⃣ AI Analysis</div>
+      <div class="bg-white p-6 rounded-lg shadow">4️⃣ View Results</div>
+    </div>
+  </div>
+</section>
+
+<!------------------------------------------------------------------------>
+<footer class="bg-gray-900 text-gray-300 py-12">
+    <div class="max-w-screen-xl mx-auto px-6 flex justify-center text-center">
+
+        <div>
+            <h1 class="font-bold text-white mb-4">Contact</h1>
+            <p class="text-sm">Email: plantdetector@gmail.com</p>
+            <p class="text-sm">Phone: 09999999999</p>
+        </div>
+
+    </div>
+
+    <div class="text-center text-sm text-gray-500 mt-10">
+        © 2026 Plant Disease Detector. All rights reserved.
+    </div>
+</footer>
+
+
+<!------------------------------------------------------------------------>
+<div id="loginModal"
+  class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+
+  <div class="bg-white w-full max-w-md p-6 rounded-lg relative">
+
+    <button id="closeModalBtn"
+      class="absolute top-2 right-2 text-gray-500 hover:text-black">✕</button>
+
+    <h2 id="modalTitle" class="text-2xl font-bold mb-4 text-center">
+      Login
+    </h2>
+
+    <div id="message" class="text-center mb-4"></div>
+
+    <!------------------------------------------------------------------------>
+
+
+    <form id="loginForm" class="space-y-4">
+      <input type="email" placeholder="Email"
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
+      <input type="password" placeholder="Password"
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
+
+      <button
+        class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
+        Login
+      </button>
+
+      <p class="text-center text-sm">
+        No account?
+        <a href="#" id="showRegisterForm" class="text-blue-500 hover:underline">Register</a>
+      </p>
+    </form>
+
+<!------------------------------------------------------------------------>
+    <form id="registerForm" class="space-y-4 hidden">
+      <input type="text" placeholder="Full Name"
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
+      <input type="email" placeholder="Email"
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
+      <input type="password" placeholder="Password"
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
+
+      <button
+        class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
+        Register
+      </button>
+
+      <p class="text-center text-sm">
+        Already have an account?
+        <a href="#" id="showLoginForm" class="text-blue-500 hover:underline">Login</a>
+      </p>
+    </form>
+
+  </div>
+</div>
+
+
+<!------------------------------------------------------------------------>
+
+
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+AOS.init({ once: true, duration: 800, easing: 'ease-in-out' });
+
+const loginModal = document.getElementById("loginModal");
+const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
+const modalTitle = document.getElementById("modalTitle");
+
+document.getElementById("openModalBtn").onclick = () => loginModal.classList.remove("hidden");
+document.getElementById("closeModalBtn").onclick = () => loginModal.classList.add("hidden");
+
+document.getElementById("showRegisterForm").onclick = (e) => {
+  e.preventDefault();
+  loginForm.classList.add("hidden");
+  registerForm.classList.remove("hidden");
+  modalTitle.textContent = "Register";
+};
+
+document.getElementById("showLoginForm").onclick = (e) => {
+  e.preventDefault();
+  registerForm.classList.add("hidden");
+  loginForm.classList.remove("hidden");
+  modalTitle.textContent = "Login";
+};
+
+/////////////////////////////////////////////////
+// REGISTER
+/////////////////////////////////////////////////
+
+registerForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const inputs = registerForm.querySelectorAll("input");
+
+  const data = {
+    name: inputs[0].value,
+    email: inputs[1].value,
+    password: inputs[2].value
+  };
+
+  const res = await fetch("http://127.0.0.1:8000/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+
+  const result = await res.json();
+
+  if (res.ok) {
+    Swal.fire("Success", result.message, "success");
+    registerForm.reset();
+  } else {
+    Swal.fire("Error", result.detail || "Registration failed", "error");
+  }
+});
+
+/////////////////////////////////////////////////
+// LOGIN
+/////////////////////////////////////////////////
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const inputs = loginForm.querySelectorAll("input");
+
+  const data = {
+    email: inputs[0].value,
+    password: inputs[1].value
+  };
+
+  const res = await fetch("http://127.0.0.1:8000/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+
+  const result = await res.json();
+
+  if (res.ok) {
+
+    localStorage.setItem("token", result.access_token);
+    localStorage.setItem("user_name", result.name);
+
+    Swal.fire({
+      icon: "success",
+      title: "Login Successful",
+      text: "Redirecting to dashboard...",
+      timer: 1200,
+      showConfirmButton: false
+    });
+
+    setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 1200);
+
+  } else {
+    Swal.fire("Error", result.detail || "Login failed", "error");
+  }
+
+});
+
+</script>
+
+
+</body>
+</html>
