@@ -1,0 +1,28 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+env/
+
+# Logs
+*.log
+
+# Data files
+*.csv
+*.h5
+*.mp4
+*.zip
+
+# IDE settings
+.vscode/
+.idea/
+
+# Ignore large files and folders
+*.zip
+*.exe
+node_modules/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
