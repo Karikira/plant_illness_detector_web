@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Plant Disease Detector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="icon" href="/favicon.ico">
+</head>
+<body class="bg-green-50 text-gray-800">
+  <div class="min-h-screen flex">
+    <aside class="w-72 bg-green-900 text-white p-6 hidden md:block">
+      <div class="text-xl font-bold mb-6">Admin Panel</div>
+      <nav class="space-y-2 text-sm">
+        <a class="block px-3 py-2 rounded hover:bg-green-800" href="/dashboard">User Dashboard</a>
+        <a class="block px-3 py-2 rounded hover:bg-green-800" href="/analysis">AI Analysis</a>
+        <a class="block px-3 py-2 rounded hover:bg-green-800" href="/results">AI Results</a>
+        <a class="block px-3 py-2 rounded hover:bg-green-800" href="/profile">Profile</a>
+        <a class="block px-3 py-2 rounded bg-green-800" href="/admin">Admin</a>
+      </nav>
+    </aside>
+
+    <main class="flex-1">
+      <nav class="bg-green-800 shadow-md p-4 flex justify-between items-center">
+        <h1 class="text-white text-2xl font-bold">Admin</h1>
+        <button id="logoutBtn" class="bg-white text-green-800 px-4 py-2 rounded-full font-semibold hover:bg-green-100">
+          Logout
+        </button>
+      </nav>
+
+      <section class="max-w-7xl mx-auto px-6 py-10 space-y-8">
+        <div class="grid md:grid-cols-3 gap-6">
+          <div class="bg-white rounded-xl shadow p-6">
+            <div class="text-sm text-gray-600">Total detections</div>
+            <div id="totalDetections" class="text-3xl font-extrabold text-green-800 mt-2">—</div>
+          </div>
+          <div class="bg-white rounded-xl shadow p-6">
+            <div class="text-sm text-gray-600">Total users</div>
+            <div id="totalUsers" class="text-3xl font-extrabold text-green-800 mt-2">—</div>
+          </div>
+          <div class="bg-white rounded-xl shadow p-6">
+            <div class="text-sm text-gray-600">Top illness</div>
+            <div id="topIllness" class="text-xl font-bold text-green-800 mt-3">—</div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl shadow p-6">
+            <div class="font-bold text-green-800">Detections by day</div>
+            <canvas id="byDayChart" class="mt-4"></canvas>
+          </div>
+          <div class="bg-white rounded-xl shadow p-6">
+            <div class="font-bold text-green-800">Illness distribution</div>
+            <canvas id="byIllnessChart" class="mt-4"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-bold text-green-800">Users</div>
+              <div class="text-sm text-gray-600">Latest registered users</div>
+            </div>
+            <button id="refreshBtn" class="bg-gray-100 px-5 py-2 rounded-lg font-semibold hover:bg-gray-200">Refresh</button>
+          </div>
+          <div class="overflow-auto mt-4">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-600">
+                  <th class="py-2 pr-4">Name</th>
+                  <th class="py-2 pr-4">Email</th>
+                  <th class="py-2 pr-4">Created</th>
+                </tr>
+              </thead>
+              <tbody id="usersTable" class="divide-y"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const isAdmin = localStorage.getItem("is_admin") === "1";
+    if (!isAdmin) window.location.href = "/dashboard";
+
+    document.getElementById("logoutBtn").onclick = () => {
+      localStorage.removeItem("user_id");
+      localStorage.removeItem("user_name");
+      localStorage.removeItem("user_email");
+      localStorage.removeItem("is_admin");
+      window.location.href = "/";
+    };
+
+    let byDayChart, byIllnessChart;
+
+    function renderCharts(stats) {
+      const byDay = stats?.by_day || {};
+      const byIllness = stats?.by_illness || {};
+
+      const dayLabels = Object.keys(byDay).sort();
+      const dayValues = dayLabels.map(k => byDay[k]);
+
+      const illnessEntries = Object.entries(byIllness).sort((a,b) => b[1]-a[1]);
+      const illnessLabels = illnessEntries.map(x => x[0]);
+      const illnessValues = illnessEntries.map(x => x[1]);
+
+      document.getElementById("totalDetections").textContent = String(stats?.total ?? 0);
+      document.getElementById("topIllness").textContent = illnessEntries[0]?.[0] || "—";
+
+      const ctx1 = document.getElementById("byDayChart");
+      const ctx2 = document.getElementById("byIllnessChart");
+
+      if (byDayChart) byDayChart.destroy();
+      if (byIllnessChart) byIllnessChart.destroy();
+
+      byDayChart = new Chart(ctx1, {
+        type: "line",
+        data: { labels: dayLabels, datasets: [{ label: "Detections", data: dayValues, borderColor: "#166534", backgroundColor: "rgba(22,101,52,0.15)", fill: true, tension: 0.25 }] },
+        options: { responsive: true, plugins: { legend: { display: true } } }
+      });
+
+      byIllnessChart = new Chart(ctx2, {
+        type: "bar",
+        data: { labels: illnessLabels, datasets: [{ label: "Count", data: illnessValues, backgroundColor: "#15803d" }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+    }
+
+    async function loadAdmin() {
+      const [usersRes, statsRes] = await Promise.all([
+        fetch("/admin/users"),
+        fetch("/admin/stats")
+      ]);
+      const users = await usersRes.json();
+      const stats = await statsRes.json();
+      if (!usersRes.ok) throw new Error(users?.detail || "Failed to load users");
+      if (!statsRes.ok) throw new Error(stats?.detail || "Failed to load stats");
+
+      document.getElementById("totalUsers").textContent = String(Array.isArray(users) ? users.length : 0);
+
+      const tbody = document.getElementById("usersTable");
+      tbody.innerHTML = "";
+      for (const u of (Array.isArray(users) ? users.slice(0, 50) : [])) {
+        const tr = document.createElement("tr");
+        const created = u?.created_at ? new Date(u.created_at).toLocaleString() : "";
+        tr.innerHTML = `
+          <td class="py-2 pr-4 font-semibold">${u?.name || "—"}</td>
+          <td class="py-2 pr-4">${u?.email || "—"}</td>
+          <td class="py-2 pr-4 text-gray-600">${created}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      renderCharts(stats);
+    }
+
+    document.getElementById("refreshBtn").onclick = () => loadAdmin().catch(e => Swal.fire("Error", String(e), "error"));
+    loadAdmin().catch(e => Swal.fire("Error", String(e), "error"));
+  </script>
+</body>
+</html>
