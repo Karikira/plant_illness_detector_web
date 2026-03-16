@@ -6,7 +6,7 @@
     <title>PLANT DISEASE DETECTOR</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <link rel="icon" type="image/png" href="Pictures/logo.png">
+    <link rel="icon" href="/favicon.ico">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 
  
@@ -149,6 +149,8 @@
         class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
       <input type="password" placeholder="Password"
         class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
+      <input type="password" placeholder="Confirm Password"
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
 
       <button
         class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
@@ -198,28 +200,64 @@ document.getElementById("showLoginForm").onclick = (e) => {
 // REGISTER
 /////////////////////////////////////////////////
 
+// #region agent log
+const __dbg = (location, message, data) => {
+  try {
+    fetch('http://127.0.0.1:7301/ingest/e5b50c11-ad7e-48d3-96ab-54005120b670',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff9b8'},body:JSON.stringify({sessionId:'fff9b8',runId:'pre-fix',hypothesisId:'H5',location,message,data:data||{},timestamp:Date.now()})}).catch(()=>{});
+  } catch (_) {}
+};
+// #endregion
+
 registerForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const inputs = registerForm.querySelectorAll("input");
-
-  const data = {
-    name: inputs[0].value,
-    email: inputs[1].value,
-    password: inputs[2].value
-  };
-
-  const res = await fetch("http://127.0.0.1:8000/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
+  __dbg("index.html:register", "submit_fired", {
+    inputs_len: inputs?.length ?? null,
+    display_name_len: (inputs?.[0]?.value || "").length,
+    email_len: (inputs?.[1]?.value || "").length,
+    password_len: (inputs?.[2]?.value || "").length,
+    confirm_password_len: (inputs?.[3]?.value || "").length
   });
 
-  const result = await res.json();
+  const password = inputs?.[2]?.value || "";
+  const confirmPassword = inputs?.[3]?.value || "";
+  if (password !== confirmPassword) {
+    __dbg("index.html:register", "password_mismatch", {});
+    Swal.fire("Error", "Passwords do not match.", "error");
+    return;
+  }
+
+  const data = {
+    display_name: inputs[0].value,
+    email: inputs[1].value,
+    password: password
+  };
+
+  let res;
+  let result;
+  try {
+    res = await fetch("http://127.0.0.1:8000/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    const text = await res.text();
+    try { result = JSON.parse(text); } catch { result = { raw: text }; }
+    __dbg("index.html:register", "fetch_done", { status: res.status, ok: res.ok, has_result: !!result });
+  } catch (err) {
+    __dbg("index.html:register", "fetch_failed", { error: String(err).slice(0, 200) });
+    Swal.fire("Error", "Registration failed (network error)", "error");
+    return;
+  }
 
   if (res.ok) {
     Swal.fire("Success", result.message, "success");
     registerForm.reset();
+    // Auto return user to login form after successful registration
+    registerForm.classList.add("hidden");
+    loginForm.classList.remove("hidden");
+    modalTitle.textContent = "Login";
   } else {
     Swal.fire("Error", result.detail || "Registration failed", "error");
   }
@@ -247,9 +285,11 @@ loginForm.addEventListener("submit", async (e) => {
   const result = await res.json();
 
   if (res.ok) {
-
-    localStorage.setItem("token", result.access_token);
-    localStorage.setItem("user_name", result.name);
+    // store current user for dashboard + future uploads
+    localStorage.setItem("user_id", result?.user?.id || "");
+    localStorage.setItem("user_name", result?.user?.display_name || result?.user?.email || "");
+    localStorage.setItem("user_email", result?.user?.email || "");
+    localStorage.setItem("is_admin", result?.is_admin ? "1" : "0");
 
     Swal.fire({
       icon: "success",
@@ -260,7 +300,7 @@ loginForm.addEventListener("submit", async (e) => {
     });
 
     setTimeout(() => {
-      window.location.href = "/dashboard";
+      window.location.href = result?.is_admin ? "/admin" : "/dashboard";
     }, 1200);
 
   } else {

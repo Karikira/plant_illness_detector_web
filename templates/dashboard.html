@@ -13,43 +13,73 @@
 </head>
 <body class="bg-green-50 text-gray-800">
 
-<!-- NAVBAR -->
-<nav class="bg-green-700 shadow-md p-4 flex justify-between items-center">
-  <h1 class="text-white text-2xl font-bold">🌱 Dashboard</h1>
-  <button id="logoutBtn" class="bg-white text-green-700 px-4 py-2 rounded-full font-semibold hover:bg-green-100">
-    Logout
-  </button>
-</nav>
+<div class="min-h-screen flex">
+  <aside class="w-64 bg-green-800 text-white p-6 hidden md:block">
+    <div class="text-xl font-bold mb-6">Plant Disease Detector</div>
+    <nav class="space-y-2 text-sm">
+      <a class="block px-3 py-2 rounded bg-green-700" href="/dashboard">Dashboard</a>
+      <a class="block px-3 py-2 rounded hover:bg-green-700" href="/analysis">AI Analysis</a>
+      <a class="block px-3 py-2 rounded hover:bg-green-700" href="/results">AI Results</a>
+      <a class="block px-3 py-2 rounded hover:bg-green-700" href="/profile">Profile</a>
+      <a id="adminLink" class="hidden block px-3 py-2 rounded hover:bg-green-700" href="/admin">Admin</a>
+    </nav>
+  </aside>
 
-<!-- DASHBOARD CONTENT -->
-<section class="max-w-6xl mx-auto px-6 py-12">
-  <h2 id="welcomeMsg" class="text-3xl font-bold text-green-700 mb-6">Welcome!</h2>
-  <p class="text-gray-700 mb-8">
-    Here you can upload plant images, view results, and track detected diseases.
-  </p>
+  <main class="flex-1">
+    <nav class="bg-green-700 shadow-md p-4 flex justify-between items-center">
+      <h1 class="text-white text-2xl font-bold">Dashboard</h1>
+      <button id="logoutBtn" class="bg-white text-green-700 px-4 py-2 rounded-full font-semibold hover:bg-green-100">
+        Logout
+      </button>
+    </nav>
 
-  <!-- Placeholder for future features -->
-  <div class="bg-white p-6 rounded-lg shadow-md">
-    <p class="text-gray-600">Feature placeholders: Upload Images, AI Analysis, Results.</p>
-  </div>
-</section>
+    <section class="max-w-6xl mx-auto px-6 py-10">
+      <h2 id="welcomeMsg" class="text-3xl font-bold text-green-700 mb-2">Welcome!</h2>
+      <p class="text-gray-700 mb-8">
+        Use the menu to run AI analysis, view results, and manage your profile.
+      </p>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        <a href="/analysis" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition">
+          <div class="text-green-700 font-bold text-lg">AI Analysis</div>
+          <div class="text-gray-600 text-sm mt-1">Upload a plant leaf image and run the AI.</div>
+        </a>
+        <a href="/results" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition">
+          <div class="text-green-700 font-bold text-lg">AI Results</div>
+          <div class="text-gray-600 text-sm mt-1">Browse your history, sorted by date.</div>
+        </a>
+        <a href="/profile" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition">
+          <div class="text-green-700 font-bold text-lg">Profile</div>
+          <div class="text-gray-600 text-sm mt-1">Edit your name and email.</div>
+        </a>
+      </div>
+    </section>
+  </main>
+</div>
 
 <script>
-// Get user email from sessionStorage
-const userEmail = sessionStorage.getItem("userEmail");
+const userEmail = localStorage.getItem("user_email");
+const userName = localStorage.getItem("user_name");
+const isAdmin = localStorage.getItem("is_admin") === "1";
 const welcomeMsg = document.getElementById("welcomeMsg");
 
 if (!userEmail) {
-  // If no user, redirect back to login
-  window.location.href = "index.html";
+  // If no user, redirect back to home
+  window.location.href = "/";
 } else {
-  welcomeMsg.textContent = `Welcome, ${userEmail}!`;
+  welcomeMsg.textContent = `Welcome, ${userName || userEmail}!`;
+}
+
+if (isAdmin) {
+  document.getElementById("adminLink")?.classList.remove("hidden");
 }
 
 // Logout
 document.getElementById("logoutBtn").onclick = () => {
-  sessionStorage.removeItem("userEmail");
-  window.location.href = "index.html";
+  localStorage.removeItem("user_id");
+  localStorage.removeItem("user_name");
+  localStorage.removeItem("user_email");
+  window.location.href = "/";
 };
 </script>
 

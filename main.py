@@ -1,11 +1,17 @@
 # flake8: noqa: E302,E501
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, Response
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import bcrypt
 import os
 from dotenv import load_dotenv
 from supabase import create_client
+from typing import Any
+import json
+import time
+from postgrest.exceptions import APIError
 
 # AI/agent imports
 from pydantic_ai import Agent
@@ -17,6 +23,48 @@ import base64
 load_dotenv()
 
 app = FastAPI()
+
+# region agent log
+def _dbg(hypothesis_id: str, location: str, message: str, data: dict | None = None, run_id: str = "pre-fix") -> None:
+    try:
+        with open("debug-fff9b8.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "sessionId": "fff9b8",
+                "runId": run_id,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data or {},
+                "timestamp": int(time.time() * 1000),
+            }) + "\n")
+    except Exception:
+        pass
+# endregion
+
+# region agent log
+try:
+    import sys
+    try:
+        import jinja2 as _jinja2  # type: ignore
+        _dbg("H2", "main.py:jinja2_check", "jinja2_import_ok", {"version": getattr(_jinja2, "__version__", None), "executable": sys.executable})
+    except Exception as e:
+        _dbg("H2", "main.py:jinja2_check", "jinja2_import_failed", {"error": str(e), "executable": sys.executable})
+except Exception:
+    pass
+# endregion
+
+templates = Jinja2Templates(directory="templates")
+
+_dbg(
+    "H1",
+    "main.py:startup",
+    "app_startup",
+    {
+        "has_root_route": any(getattr(r, "path", None) == "/" for r in app.routes),
+        "route_paths": [getattr(r, "path", None) for r in app.routes if getattr(r, "path", None)],
+        "templates_dir_exists": os.path.isdir("templates"),
+    },
+)
 
 
 # ---------------- CORS ----------------
@@ -37,6 +85,9 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------------- APP SETTINGS ----------------
+ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
 
 # ---------------- AI AGENT ----------------
 # model choice and prompt replicated from app.py
@@ -77,6 +128,8 @@ Only return JSON.
 
 # ---------------- AUTH MODELS ----------------
 class RegisterData(BaseModel):
+    # Supabase table schema appears to use `name` (not `display_name`)
+    # Keep `display_name` to match client naming, but write to `name` column.
     display_name: str
     email: str
     password: str
@@ -92,45 +145,216 @@ class LoginData(BaseModel):
 def register(data: RegisterData):
     password_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
 
-    resp = supabase.table("users").insert({
-        "display_name": data.display_name,
-        "email": data.email,
-        "password_hash": password_hash
-    }).execute()
-    if resp.error:
-        raise HTTPException(status_code=500, detail=resp.error.message)
+    try:
+        resp: Any = supabase.table("users").insert({
+            "name": data.display_name,
+            "email": data.email,
+            "password_hash": password_hash
+        }).execute()
+        if getattr(resp, "error", None):
+            raise HTTPException(status_code=500, detail=str(resp.error))
+    except APIError as e:
+        # region agent log
+        _dbg("H6", "main.py:register", "register_api_error", {"error": str(e)[:250]})
+        # endregion
+        msg = ""
+        try:
+            msg = str(getattr(e, "args", [""])[0])
+        except Exception:
+            msg = str(e)
+        msg_l = msg.lower()
+        # Common Postgres uniqueness violations or duplicate key messages
+        if "duplicate key" in msg_l or "already exists" in msg_l or "unique" in msg_l:
+            raise HTTPException(status_code=409, detail="Account already exists. Please login instead.")
+        raise HTTPException(status_code=500, detail="Registration failed due to server error")
 
     return {"message": "Registration successful"}
+
+
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    _dbg("H1", "main.py:home", "home_route_hit", {"path": str(request.url.path)})
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    _dbg("H3", "main.py:dashboard", "dashboard_route_hit", {"path": str(request.url.path)})
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
+@app.get("/profile", response_class=HTMLResponse)
+def profile_page(request: Request):
+    return templates.TemplateResponse("profile.html", {"request": request})
+
+
+@app.get("/analysis", response_class=HTMLResponse)
+def analysis_page(request: Request):
+    return templates.TemplateResponse("analysis.html", {"request": request})
+
+
+@app.get("/results", response_class=HTMLResponse)
+def results_page(request: Request):
+    return templates.TemplateResponse("results.html", {"request": request})
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    return templates.TemplateResponse("admin.html", {"request": request})
+
+
+@app.get("/favicon.ico")
+def favicon():
+    # avoid noisy 404s in logs; real icon can be added later
+    return Response(status_code=204)
 
 
 # ---------------- LOGIN ----------------
 @app.post("/login")
 def login(data: LoginData):
-    response = supabase.table("users").select("*").eq("email", data.email).execute()
-    user = response.data[0] if response.data else None
+    # region agent log
+    _dbg("H4", "main.py:login", "login_attempt", {"email": data.email})
+    # endregion
+    try:
+        response: Any = supabase.table("users").select("*").eq("email", data.email).execute()
+        # region agent log
+        _dbg(
+            "H4",
+            "main.py:login",
+            "login_supabase_response",
+            {
+                "has_data": bool(getattr(response, "data", None)),
+                "data_type": str(type(getattr(response, "data", None))),
+                "data_len": len(getattr(response, "data", []) or []) if isinstance(getattr(response, "data", None), list) else None,
+                "has_error_attr": hasattr(response, "error"),
+                "error_str": str(getattr(response, "error", None))[:200] if hasattr(response, "error") else None,
+            },
+        )
+        # endregion
+        user: Any = response.data[0] if response.data else None
 
-    if not user or not bcrypt.checkpw(data.password.encode(), user["password_hash"].encode()):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not user:
+            # region agent log
+            _dbg("H4", "main.py:login", "login_user_not_found", {"email": data.email})
+            # endregion
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return {"message": "Login successful"}
+        stored_hash = user.get("password_hash") if isinstance(user, dict) else None
+        ok = bool(stored_hash) and bcrypt.checkpw(data.password.encode(), str(stored_hash).encode())
+        # region agent log
+        _dbg(
+            "H4",
+            "main.py:login",
+            "login_password_check",
+            {"stored_hash_present": bool(stored_hash), "password_ok": ok},
+        )
+        # endregion
+
+        if not ok:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        is_admin = False
+        if ADMIN_EMAIL and isinstance(user, dict):
+            is_admin = (str(user.get("email") or "").strip().lower() == ADMIN_EMAIL)
+
+        return {
+            "message": "Login successful",
+            "is_admin": is_admin,
+            "user": {
+                "id": user.get("id") if isinstance(user, dict) else None,
+                "display_name": (user.get("display_name") or user.get("name")) if isinstance(user, dict) else None,
+                "email": user.get("email") if isinstance(user, dict) else None,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # region agent log
+        _dbg("H4", "main.py:login", "login_exception", {"error": str(e)[:300]})
+        # endregion
+        raise HTTPException(status_code=500, detail="Login failed due to server error")
 
 
 # helper function to fetch a user by email (used by login, etc.)
 def get_user_by_email(email: str):
-    resp = supabase.table("users").select("*") \
-                  .eq("email", email).single().execute()
+    resp: Any = supabase.table("users").select("*") \
+        .eq("email", email).single().execute()
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return resp.data
 
 
+class UpdateProfileData(BaseModel):
+    display_name: str | None = None
+    email: str | None = None
+
+
+@app.get("/users/{user_id}")
+def get_user(user_id: str):
+    resp: Any = supabase.table("users").select("id,name,email,created_at").eq("id", user_id).single().execute()
+    if getattr(resp, "error", None):
+        raise HTTPException(status_code=500, detail=str(resp.error))
+    return resp.data
+
+
+@app.put("/users/{user_id}")
+def update_user(user_id: str, data: UpdateProfileData):
+    update: dict[str, Any] = {}
+    if data.display_name is not None:
+        update["name"] = data.display_name
+    if data.email is not None:
+        update["email"] = data.email
+    if not update:
+        return {"status": "ok"}
+
+    try:
+        resp: Any = supabase.table("users").update(update).eq("id", user_id).execute()
+        if getattr(resp, "error", None):
+            raise HTTPException(status_code=500, detail=str(resp.error))
+        return {"status": "ok", "user": (resp.data[0] if getattr(resp, "data", None) else None)}
+    except APIError as e:
+        msg = str(e).lower()
+        if "duplicate key" in msg or "already exists" in msg or "unique" in msg:
+            raise HTTPException(status_code=409, detail="Email already in use.")
+        raise HTTPException(status_code=500, detail="Profile update failed.")
+
+
+@app.get("/admin/users")
+def admin_users():
+    # Minimal admin endpoint. In production, protect this with proper auth.
+    resp: Any = supabase.table("users").select("id,name,email,created_at").order("created_at", desc=True).execute()
+    if getattr(resp, "error", None):
+        raise HTTPException(status_code=500, detail=str(resp.error))
+    return resp.data
+
+
+@app.get("/admin/stats")
+def admin_stats():
+    # Simple stats for graphs (counts by illness + daily detections).
+    resp: Any = supabase.table("detections").select("created_at,illness").order("created_at", desc=False).execute()
+    if getattr(resp, "error", None):
+        raise HTTPException(status_code=500, detail=str(resp.error))
+    rows = resp.data or []
+
+    by_day: dict[str, int] = {}
+    by_illness: dict[str, int] = {}
+    for r in rows:
+        created_at = str(r.get("created_at") or "")
+        day = created_at[:10] if len(created_at) >= 10 else "unknown"
+        by_day[day] = by_day.get(day, 0) + 1
+        illness = str(r.get("illness") or "Unknown").strip() or "Unknown"
+        by_illness[illness] = by_illness.get(illness, 0) + 1
+
+    return {"by_day": by_day, "by_illness": by_illness, "total": len(rows)}
+
+
 @app.get("/history/{user_id}")
 def history(user_id: str):
-    resp = supabase.table("detections") \
-                  .select("*") \
-                  .eq("user_id", user_id) \
-                  .order("created_at", desc=True) \
-                  .execute()
+    resp: Any = supabase.table("detections") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("created_at", desc=True) \
+        .execute()
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return resp.data
@@ -138,7 +362,7 @@ def history(user_id: str):
 
 @app.post("/activity")
 def log_activity(entry: dict):
-    resp = supabase.table("activity_logs").insert(entry).execute()
+    resp: Any = supabase.table("activity_logs").insert(entry).execute()
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return {"status": "ok"}
@@ -146,11 +370,11 @@ def log_activity(entry: dict):
 
 @app.get("/config/{key}")
 def get_config(key: str):
-    resp = supabase.table("system_config") \
-                  .select("value") \
-                  .eq("key", key) \
-                  .single() \
-                  .execute()
+    resp: Any = supabase.table("system_config") \
+        .select("value") \
+        .eq("key", key) \
+        .single() \
+        .execute()
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return resp.data
@@ -158,7 +382,7 @@ def get_config(key: str):
 
 @app.post("/detections")
 def add_detection(item: dict):
-    resp = supabase.table("detections").insert(item).execute()
+    resp: Any = supabase.table("detections").insert(item).execute()
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return resp.data
@@ -166,7 +390,7 @@ def add_detection(item: dict):
 
 @app.post("/config")
 def set_config(item: dict):
-    resp = supabase.table("system_config").upsert(item).execute()
+    resp: Any = supabase.table("system_config").upsert(item).execute()
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return {"status": "ok"}
@@ -181,8 +405,47 @@ async def predict(file: UploadFile = File(...)):
     image_base64 = f"data:{file.content_type};base64,{encoded_string}"
 
     # run agent
-    result = await agent.run(
+    agent_any: Any = agent
+    result = await agent_any.run(
         "Analyze this plant leaf image and identify the disease.",
-        deps={"image": ImageUrl(url=image_base64)}
+        deps={"image": ImageUrl(url=image_base64)},
     )
+
     return {"result": result.output}
+
+
+@app.post("/analyze")
+async def analyze_and_save(user_id: str = Form(...), file: UploadFile = File(...)):
+    """
+    Combined endpoint for mobile or web:
+    - accepts a user_id and image file
+    - runs the AI agent to analyze the plant
+    - stores the result in the detections table
+    - returns both the AI result and stored detection row
+    """
+    image_bytes = await file.read()
+    encoded_string = base64.b64encode(image_bytes).decode("utf-8")
+    image_base64 = f"data:{file.content_type};base64,{encoded_string}"
+
+    agent_any: Any = agent
+    result = await agent_any.run(
+        "Analyze this plant leaf image and identify the disease.",
+        deps={"image": ImageUrl(url=image_base64)},
+    )
+
+    output: Any = result.output
+    detection_payload = {
+        "user_id": user_id,
+        "image_filename": file.filename,
+        "name": output.get("name") if isinstance(output, dict) else None,
+        "illness": output.get("illness") if isinstance(output, dict) else None,
+        "treatment": output.get("treatment") if isinstance(output, dict) else None,
+        "prevention": output.get("prevention") if isinstance(output, dict) else None,
+        "raw_result": output,
+    }
+
+    resp: Any = supabase.table("detections").insert(detection_payload).execute()
+    if resp.error:
+        raise HTTPException(status_code=500, detail=resp.error.message)
+
+    return {"result": output, "detection": resp.data}
