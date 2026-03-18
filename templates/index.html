@@ -125,11 +125,16 @@
 
 
     <form id="loginForm" class="space-y-4">
-      <input type="email" placeholder="Email"
+      <input id="loginEmail" type="email" placeholder="Email"
         class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
-      <input type="password" placeholder="Password"
-        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
-
+      <div class="relative">
+        <input id="loginPassword" type="password" placeholder="Password"
+          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400 pr-10" required>
+        <button id="loginPasswordToggle" type="button" aria-label="Toggle password visibility"
+          class="absolute inset-y-0 right-2 text-gray-500 hover:text-gray-700 focus:outline-none">
+          👁
+        </button>
+      </div>
       <button
         class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
         Login
@@ -143,15 +148,26 @@
 
 <!------------------------------------------------------------------------>
     <form id="registerForm" class="space-y-4 hidden">
-      <input type="text" placeholder="Full Name"
+      <input id="registerName" type="text" placeholder="Full Name"
         class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
-      <input type="email" placeholder="Email"
+      <input id="registerEmail" type="email" placeholder="Email"
         class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
-      <input type="password" placeholder="Password"
-        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
-      <input type="password" placeholder="Confirm Password"
-        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400" required>
-
+      <div class="relative">
+        <input id="registerPassword" type="password" placeholder="Password"
+          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400 pr-10" required>
+        <button id="registerPasswordToggle" type="button" aria-label="Toggle password visibility"
+          class="absolute inset-y-0 right-2 text-gray-500 hover:text-gray-700 focus:outline-none">
+          👁
+        </button>
+      </div>
+      <div class="relative">
+        <input id="registerConfirmPassword" type="password" placeholder="Confirm Password"
+          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-400 pr-10" required>
+        <button id="registerConfirmPasswordToggle" type="button" aria-label="Toggle confirm password visibility"
+          class="absolute inset-y-0 right-2 text-gray-500 hover:text-gray-700 focus:outline-none">
+          👁
+        </button>
+      </div>
       <button
         class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition">
         Register
@@ -196,6 +212,20 @@ document.getElementById("showLoginForm").onclick = (e) => {
   modalTitle.textContent = "Login";
 };
 
+function attachPasswordToggle(inputId, buttonId) {
+  const input = document.getElementById(inputId);
+  const button = document.getElementById(buttonId);
+  if (!input || !button) return;
+  button.addEventListener('click', () => {
+    input.type = input.type === 'password' ? 'text' : 'password';
+    button.textContent = input.type === 'password' ? '👁' : '🙈';
+    input.focus();
+  });
+}
+attachPasswordToggle('loginPassword','loginPasswordToggle');
+attachPasswordToggle('registerPassword','registerPasswordToggle');
+attachPasswordToggle('registerConfirmPassword','registerConfirmPasswordToggle');
+
 /////////////////////////////////////////////////
 // REGISTER
 /////////////////////////////////////////////////
@@ -237,7 +267,7 @@ registerForm.addEventListener("submit", async (e) => {
   let res;
   let result;
   try {
-    res = await fetch("http://127.0.0.1:8000/register", {
+    res = await fetch("/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
@@ -276,7 +306,7 @@ loginForm.addEventListener("submit", async (e) => {
     password: inputs[1].value
   };
 
-  const res = await fetch("http://127.0.0.1:8000/login", {
+  const res = await fetch("/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)

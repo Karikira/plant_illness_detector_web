@@ -147,26 +147,18 @@ def register(data: RegisterData):
 
     try:
         resp: Any = supabase.table("users").insert({
-            "name": data.display_name,
+            "display_name": data.display_name,
             "email": data.email,
             "password_hash": password_hash
         }).execute()
         if getattr(resp, "error", None):
             raise HTTPException(status_code=500, detail=str(resp.error))
     except APIError as e:
-        # region agent log
-        _dbg("H6", "main.py:register", "register_api_error", {"error": str(e)[:250]})
-        # endregion
-        msg = ""
-        try:
-            msg = str(getattr(e, "args", [""])[0])
-        except Exception:
-            msg = str(e)
-        msg_l = msg.lower()
-        # Common Postgres uniqueness violations or duplicate key messages
-        if "duplicate key" in msg_l or "already exists" in msg_l or "unique" in msg_l:
-            raise HTTPException(status_code=409, detail="Account already exists. Please login instead.")
-        raise HTTPException(status_code=500, detail="Registration failed due to server error")
+        _dbg("H6", "main.py:register", "register_api_error", {"error": str(e)[:1000]})
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        _dbg("H6", "main.py:register", "register_exception", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {"message": "Registration successful"}
 
@@ -291,7 +283,7 @@ class UpdateProfileData(BaseModel):
 
 @app.get("/users/{user_id}")
 def get_user(user_id: str):
-    resp: Any = supabase.table("users").select("id,name,email,created_at").eq("id", user_id).single().execute()
+    resp: Any = supabase.table("users").select("id,display_name,email").eq("id", user_id).single().execute()
     if getattr(resp, "error", None):
         raise HTTPException(status_code=500, detail=str(resp.error))
     return resp.data
@@ -301,7 +293,7 @@ def get_user(user_id: str):
 def update_user(user_id: str, data: UpdateProfileData):
     update: dict[str, Any] = {}
     if data.display_name is not None:
-        update["name"] = data.display_name
+        update["display_name"] = data.display_name
     if data.email is not None:
         update["email"] = data.email
     if not update:
@@ -322,7 +314,7 @@ def update_user(user_id: str, data: UpdateProfileData):
 @app.get("/admin/users")
 def admin_users():
     # Minimal admin endpoint. In production, protect this with proper auth.
-    resp: Any = supabase.table("users").select("id,name,email,created_at").order("created_at", desc=True).execute()
+    resp: Any = supabase.table("users").select("id,display_name,email,created_at").order("created_at", desc=True).execute()
     if getattr(resp, "error", None):
         raise HTTPException(status_code=500, detail=str(resp.error))
     return resp.data
@@ -350,14 +342,27 @@ def admin_stats():
 
 @app.get("/history/{user_id}")
 def history(user_id: str):
-    resp: Any = supabase.table("detections") \
-        .select("*") \
-        .eq("user_id", user_id) \
-        .order("created_at", desc=True) \
-        .execute()
-    if resp.error:
-        raise HTTPException(status_code=500, detail=resp.error.message)
-    return resp.data
+    try:
+        import uuid as _uuid
+        _uuid.UUID(user_id)
+    except Exception:
+        return []
+    try:
+        resp: Any = supabase.table("detections") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .execute()
+        if getattr(resp, "error", None):
+            _dbg("H7", "main.py:history", "history_supabase_error", {"error": str(resp.error)})
+            raise HTTPException(status_code=500, detail=str(resp.error))
+        return resp.data
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e)
+        _dbg("H7", "main.py:history", "history_exception", {"error": msg})
+        raise HTTPException(status_code=500, detail="Failed to fetch history: " + msg)
 
 
 @app.post("/activity")
@@ -414,38 +419,51 @@ async def predict(file: UploadFile = File(...)):
     return {"result": result.output}
 
 
+def _normalize_ai_output(output: Any) -> dict[str, Any]:
+    if isinstance(output, dict):
+        return output
+    if isinstance(output, str):
+        try:
+            parsed = json.loads(output)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+    return {"raw": output}
+
+
 @app.post("/analyze")
 async def analyze_and_save(user_id: str = Form(...), file: UploadFile = File(...)):
-    """
-    Combined endpoint for mobile or web:
-    - accepts a user_id and image file
-    - runs the AI agent to analyze the plant
-    - stores the result in the detections table
-    - returns both the AI result and stored detection row
-    """
     image_bytes = await file.read()
     encoded_string = base64.b64encode(image_bytes).decode("utf-8")
     image_base64 = f"data:{file.content_type};base64,{encoded_string}"
 
-    agent_any: Any = agent
-    result = await agent_any.run(
-        "Analyze this plant leaf image and identify the disease.",
-        deps={"image": ImageUrl(url=image_base64)},
-    )
+    try:
+        agent_any: Any = agent
+        result = await agent_any.run(
+            "Analyze this plant leaf image and identify the disease.",
+            deps={"image": ImageUrl(url=image_base64)},
+        )
 
-    output: Any = result.output
-    detection_payload = {
-        "user_id": user_id,
-        "image_filename": file.filename,
-        "name": output.get("name") if isinstance(output, dict) else None,
-        "illness": output.get("illness") if isinstance(output, dict) else None,
-        "treatment": output.get("treatment") if isinstance(output, dict) else None,
-        "prevention": output.get("prevention") if isinstance(output, dict) else None,
-        "raw_result": output,
-    }
+        output: Any = getattr(result, "output", None)
+        normalized = _normalize_ai_output(output)
 
-    resp: Any = supabase.table("detections").insert(detection_payload).execute()
-    if resp.error:
-        raise HTTPException(status_code=500, detail=resp.error.message)
+        detection_payload = {
+            "user_id": user_id,
+            "image_filename": file.filename,
+            "name": normalized.get("name"),
+            "illness": normalized.get("illness"),
+            "treatment": normalized.get("treatment"),
+            "prevention": normalized.get("prevention"),
+            "raw_result": normalized,
+        }
 
-    return {"result": output, "detection": resp.data}
+        resp: Any = supabase.table("detections").insert(detection_payload).execute()
+        if getattr(resp, "error", None):
+            _dbg("H8", "main.py:analyze", "supabase_insert_error", {"error": str(resp.error)})
+            raise HTTPException(status_code=500, detail="Failed to save detection result")
+
+        return {"result": normalized, "detection": resp.data}
+    except Exception as e:
+        _dbg("H8", "main.py:analyze", "analyze_exception", {"error": str(e)})
+        raise HTTPException(status_code=500, detail="Analysis failed: " + str(e))
