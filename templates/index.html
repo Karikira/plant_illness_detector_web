@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="icon" href="/favicon.ico">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <style> html { scroll-behavior: smooth; } </style>
 
  
 </head>
@@ -15,25 +16,25 @@
 <body class="bg-gray-100 text-gray-800 font-poppins">
 
 <!------------------------------------------------------------------------>
-<nav class="fixed w-full z-50 bg-green-700 shadow-md">
-  <div class="max-w-7xl mx-auto px-6 py-4 relative flex items-center">
+<nav class="fixed w-full z-50 bg-white/95 backdrop-blur-sm shadow-md">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
-    <div class="flex space-x-6 text-white font-semibold" data-aos="fade-right">
-      <a href="#home" class="hover:text-green-200">Home</a>
-      <a href="#about" class="hover:text-green-200">About</a>
-      <a href="#how" class="hover:text-green-200">How It Works</a>
-      <a href="#contact" class="hover:text-green-200">Contact</a>
+    <div class="flex items-center gap-3">
+      <img src="/logo.png" onerror="this.onerror=null; this.src='https://via.placeholder.com/40x40.png?text=PD'" alt="Plant Disease Detector Logo" class="w-10 h-10 rounded-full" />
+      <span class="text-xl font-bold text-green-800">Plant Disease Detector</span>
     </div>
 
-    <div class="absolute left-1/2 transform -translate-x-1/2">
-      <h1 class="text-white text-2xl md:text-3xl font-bold tracking-tight" data-aos="fade-down">
-         Plant Disease Detector
-      </h1>
+    <div class="hidden md:flex items-center gap-6 text-gray-700 font-medium" data-aos="fade-right">
+      <a href="#home" class="hover:text-green-600">Home</a>
+      <a href="#about" class="hover:text-green-600">About</a>
+      <a href="#how" class="hover:text-green-600">How It Works</a>
+      <a href="#faq" class="hover:text-green-600">FAQ</a>
+      <a href="#contact" class="hover:text-green-600">Contact</a>
     </div>
 
     <div class="ml-auto" data-aos="fade-left">
       <button id="openModalBtn"
-        class="bg-white text-green-700 px-4 py-2 rounded-full font-semibold hover:bg-green-100 transition">
+        class="bg-green-600 text-white px-5 py-2 rounded-full font-semibold hover:bg-green-700 transition-shadow shadow">
         Login
       </button>
     </div>
@@ -74,6 +75,30 @@
   </div>
 </section>
 
+<section id="faq" class="py-20 bg-white">
+  <div class="max-w-6xl mx-auto px-6 text-center" data-aos="fade-down">
+    <h2 class="text-3xl font-semibold text-green-700 mb-6">FAQ</h2>
+    <div class="grid gap-6 md:grid-cols-2 text-left">
+      <div class="bg-gray-100 p-6 rounded-lg shadow-sm">
+        <h3 class="font-bold text-lg">How do I upload an image?</h3>
+        <p class="text-gray-600 mt-2">Go to AI Analysis, click choose image, then click Run analysis. Results are saved to your history.</p>
+      </div>
+      <div class="bg-gray-100 p-6 rounded-lg shadow-sm">
+        <h3 class="font-bold text-lg">Can I track previous scans?</h3>
+        <p class="text-gray-600 mt-2">Yes, go to AI Results to view your detection history with image previews and delete capability.</p>
+      </div>
+      <div class="bg-gray-100 p-6 rounded-lg shadow-sm">
+        <h3 class="font-bold text-lg">Is this AI always accurate?</h3>
+        <p class="text-gray-600 mt-2">It provides best effort labels, but for production use, use a trained classifier or expert review.</p>
+      </div>
+      <div class="bg-gray-100 p-6 rounded-lg shadow-sm">
+        <h3 class="font-bold text-lg">How do I change profile information?</h3>
+        <p class="text-gray-600 mt-2">After login, open the profile dropdown and select Edit Profile, then update your name/email/password/photo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="how" class="py-20 bg-green-50">
   <div class="max-w-6xl mx-auto px-6 text-center">
     <h2 class="text-3xl font-semibold text-green-700 mb-12" data-aos="fade-down">
@@ -89,8 +114,8 @@
 </section>
 
 <!------------------------------------------------------------------------>
-<footer class="bg-gray-900 text-gray-300 py-12">
-    <div class="max-w-screen-xl mx-auto px-6 flex justify-center text-center">
+<footer id="contact" class="bg-gray-900 text-gray-300 py-12">
+    <div class="max-w-screen-xl mx-auto px-6 flex flex-col md:flex-row justify-between gap-6">
 
         <div>
             <h1 class="font-bold text-white mb-4">Contact</h1>

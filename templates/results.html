@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -11,22 +11,36 @@
 <body class="bg-green-50 text-gray-800">
   <div class="min-h-screen flex">
     <aside class="w-64 bg-green-800 text-white p-6 hidden md:block">
-      <div class="text-xl font-bold mb-6">Plant Disease Detector</div>
+      <div class="flex items-center gap-2 mb-6">
+        <img src="https://via.placeholder.com/32x32.png?text=PD" alt="Logo" class="w-8 h-8 rounded-full" />
+        <span class="text-xl font-bold">Plant Disease Detector</span>
+      </div>
       <nav class="space-y-2 text-sm">
         <a class="block px-3 py-2 rounded hover:bg-green-700" href="/dashboard">Dashboard</a>
         <a class="block px-3 py-2 rounded hover:bg-green-700" href="/analysis">AI Analysis</a>
         <a class="block px-3 py-2 rounded bg-green-700" href="/results">AI Results</a>
-        <a class="block px-3 py-2 rounded hover:bg-green-700" href="/profile">Profile</a>
         <a id="adminLink" class="hidden block px-3 py-2 rounded hover:bg-green-700" href="/admin">Admin</a>
       </nav>
     </aside>
 
     <main class="flex-1">
-      <nav class="bg-green-700 shadow-md p-4 flex justify-between items-center">
-        <h1 class="text-white text-2xl font-bold">AI Results</h1>
-        <button id="logoutBtn" class="bg-white text-green-700 px-4 py-2 rounded-full font-semibold hover:bg-green-100">
-          Logout
-        </button>
+      <nav class="bg-white shadow-md py-3">
+        <div class="max-w-7xl mx-auto px-6 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <img src="/logo.png" onerror="this.onerror=null;this.src='https://via.placeholder.com/32x32?text=PD'" class="w-8 h-8 rounded-full" alt="Logo" />
+            <span class="font-bold text-green-800">Plant Disease Detector</span>
+          </div>
+          <div class="relative">
+            <button id="userDropdownBtn" class="relative w-10 h-10 rounded-full overflow-hidden border-2 border-green-600 bg-white p-0">
+              <img id="userAvatar" src="https://via.placeholder.com/40?text=US" alt="Profile" class="w-full h-full object-cover" />
+            </button>
+            <div id="userDropdown" class="hidden absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-md border text-sm">
+              <button id="navEditProfile" class="block w-full px-4 py-2 text-left hover:bg-green-50">Edit Profile</button>
+              <button id="navAbout" class="block w-full px-4 py-2 text-left hover:bg-green-50">About</button>
+              <button id="logoutBtn" class="block w-full px-4 py-2 text-left hover:bg-green-50">Logout</button>
+            </div>
+          </div>
+        </div>
       </nav>
 
       <section class="max-w-6xl mx-auto px-6 py-10">
@@ -36,9 +50,32 @@
               <h2 class="text-xl font-bold text-green-700">Your detection history</h2>
               <p class="text-gray-600 text-sm mt-1">Sorted by date. Click an item to view full details.</p>
             </div>
-            <button id="refreshBtn" class="bg-gray-100 px-5 py-2 rounded-lg font-semibold hover:bg-gray-200">
-              Refresh
-            </button>
+            <button id="refreshBtn" class="bg-gray-100 px-5 py-2 rounded-lg font-semibold hover:bg-gray-200">Refresh</button>
+          </div>
+
+          <div id="controls" class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <label class="text-sm text-gray-600">Filter plant</label>
+              <input id="filterPlant" type="text" class="w-full border rounded px-2 py-1" placeholder="Name contains..." />
+            </div>
+            <div>
+              <label class="text-sm text-gray-600">Filter illness</label>
+              <input id="filterIllness" type="text" class="w-full border rounded px-2 py-1" placeholder="Illness contains..." />
+            </div>
+            <div>
+              <label class="text-sm text-gray-600">Sort by</label>
+              <select id="sortBy" class="w-full border rounded px-2 py-1">
+                <option value="created_desc">Date: newest first</option>
+                <option value="created_asc">Date: oldest first</option>
+                <option value="plant_asc">Plant A-Z</option>
+                <option value="plant_desc">Plant Z-A</option>
+                <option value="illness_asc">Illness A-Z</option>
+                <option value="illness_desc">Illness Z-A</option>
+              </select>
+            </div>
+            <div>
+              <button id="clearFilters" class="w-full bg-gray-100 px-3 py-2 rounded font-semibold hover:bg-gray-200">Clear filters</button>
+            </div>
           </div>
 
           <div id="list" class="mt-6 divide-y"></div>
@@ -48,7 +85,6 @@
     </main>
   </div>
 
-  <!-- Modal -->
   <div id="modal" class="fixed inset-0 hidden items-center justify-center bg-black/50 p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">
       <div class="flex items-center justify-between p-4 border-b">
@@ -57,6 +93,7 @@
       </div>
       <div class="p-4">
         <div class="text-sm text-gray-600" id="modalMeta"></div>
+        <div id="modalImage" class="mt-3 mb-3"></div>
         <pre id="modalBody" class="mt-3 text-sm whitespace-pre-wrap break-words bg-green-50 border rounded-lg p-3"></pre>
       </div>
     </div>
@@ -65,12 +102,19 @@
   <script>
     const userId = localStorage.getItem("user_id");
     const isAdmin = localStorage.getItem("is_admin") === "1";
+    const userAvatarImg = document.getElementById("userAvatar");
+    const profileAvatar = localStorage.getItem("profile_avatar");
+    if (profileAvatar && userAvatarImg) {
+      userAvatarImg.src = profileAvatar;
+    }
+    if (userAvatarImg) {
+      userAvatarImg.onerror = () => { userAvatarImg.src = "https://via.placeholder.com/40?text=US"; };
+    }
     if (!userId) window.location.href = "/";
     if (isAdmin) document.getElementById("adminLink")?.classList.remove("hidden");
 
     const listEl = document.getElementById("list");
     const emptyEl = document.getElementById("empty");
-
     const modal = document.getElementById("modal");
     const closeModal = document.getElementById("closeModal");
     const modalMeta = document.getElementById("modalMeta");
@@ -79,13 +123,15 @@
     function openModal(item) {
       const created = item?.created_at || "";
       modalMeta.textContent = `Date: ${created}`;
+      const imageSrc = item?.image_url || "";
+      document.getElementById("modalImage").innerHTML = imageSrc && imageSrc.startsWith("data:")
+        ? `<img src="${imageSrc}" class="w-full max-h-64 object-contain rounded-lg border" alt="detection preview" />`
+        : `<div class="text-sm text-gray-500">No image preview available</div>`;
       modalBody.textContent = JSON.stringify({
-        name: item?.name,
+        plant_name: item?.plant_name,
         illness: item?.illness,
-        treatment: item?.treatment,
-        prevention: item?.prevention,
-        image_filename: item?.image_filename,
-        raw_result: item?.raw_result
+        treatment: item?.treatment || "No treatment data",
+        prevention: item?.prevention || "No prevention data",
       }, null, 2);
       modal.classList.remove("hidden");
       modal.classList.add("flex");
@@ -99,10 +145,98 @@
     closeModal.onclick = hideModal;
     modal.addEventListener("click", (e) => { if (e.target === modal) hideModal(); });
 
+    let rawRows = [];
+
     function summary(item) {
-      const plant = item?.name || "Unknown plant";
+      const plant = item?.plant_name || "Unknown plant";
       const illness = item?.illness || "Unknown";
       return `${plant} — ${illness}`;
+    }
+
+    function applyFiltersAndRender() {
+      const plantFilter = document.getElementById("filterPlant").value.trim().toLowerCase();
+      const illnessFilter = document.getElementById("filterIllness").value.trim().toLowerCase();
+      const sortBy = document.getElementById("sortBy").value;
+
+      let rows = rawRows.slice();
+
+      if (plantFilter) rows = rows.filter(r => String(r?.plant_name || "").toLowerCase().includes(plantFilter));
+      if (illnessFilter) rows = rows.filter(r => String(r?.illness || "").toLowerCase().includes(illnessFilter));
+      rows.sort((a,b) => {
+        const aPlant = String(a?.plant_name || "").toLowerCase();
+        const bPlant = String(b?.plant_name || "").toLowerCase();
+        const aIll = String(a?.illness || "").toLowerCase();
+        const bIll = String(b?.illness || "").toLowerCase();
+        const aDate = a?.created_at ? new Date(a.created_at).getTime() : 0;
+        const bDate = b?.created_at ? new Date(b.created_at).getTime() : 0;
+
+        switch (sortBy) {
+          case "created_asc": return aDate - bDate;
+          case "created_desc": return bDate - aDate;
+          case "plant_asc": return aPlant.localeCompare(bPlant);
+          case "plant_desc": return bPlant.localeCompare(aPlant);
+          case "illness_asc": return aIll.localeCompare(bIll);
+          case "illness_desc": return bIll.localeCompare(aIll);
+          default: return 0;
+        }
+      });
+
+      listEl.innerHTML = "";
+      if (!rows.length) {
+        emptyEl.classList.remove("hidden");
+        return;
+      }
+      emptyEl.classList.add("hidden");
+
+      rows.forEach(item => {
+        const created = item?.created_at ? new Date(item.created_at).toLocaleString() : "";
+        const imageSrc = item?.image_url || "";
+        const thumbHtml = imageSrc && imageSrc.startsWith("data:")
+          ? `<img src="${imageSrc}" class="w-16 h-16 object-cover rounded-lg border mr-3" alt="preview" />`
+          : `<div class="w-16 h-16 flex items-center justify-center rounded-lg border mr-3 text-xs text-gray-500">No image</div>`;
+
+        const el = document.createElement("div");
+        el.className = "w-full text-left py-4 px-2 border-b border-gray-100 hover:bg-green-50 transition";
+        el.innerHTML = `
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+              ${thumbHtml}
+              <div>
+                <div class="font-semibold text-gray-900">${summary(item)}</div>
+                <div class="text-sm text-gray-600 mt-1">${item?.illness ? String(item.illness).slice(0, 80) + (String(item.illness).length > 80 ? '…' : '') : 'No illness info'}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="text-xs text-gray-500 whitespace-nowrap">${created}</div>
+              <button class="deleteBtn bg-red-100 text-red-700 text-xs px-2 py-1 rounded">Delete</button>
+            </div>
+          </div>
+        `;
+
+        el.querySelector(".deleteBtn").onclick = async (e) => {
+          e.stopPropagation();
+          const confirmDelete = await Swal.fire({
+            title: "Delete this entry?",
+            text: "This cannot be undone.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Delete",
+          });
+          if (!confirmDelete.isConfirmed) return;
+          try {
+            const delRes = await fetch(`/detections/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+            if (!delRes.ok) throw new Error("Delete failed");
+            rawRows = rawRows.filter(r => r.id !== item.id);
+            applyFiltersAndRender();
+            Swal.fire("Deleted", "The detection entry has been removed.", "success");
+          } catch (err) {
+            Swal.fire("Error", String(err), "error");
+          }
+        };
+
+        el.onclick = () => openModal(item);
+        listEl.appendChild(el);
+      });
     }
 
     async function loadHistory() {
@@ -111,30 +245,21 @@
       const res = await fetch(`/history/${encodeURIComponent(userId)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.detail || "Failed to load history");
-      const rows = Array.isArray(data) ? data : [];
-      if (!rows.length) {
-        emptyEl.classList.remove("hidden");
-        return;
-      }
-      for (const item of rows) {
-        const created = item?.created_at ? new Date(item.created_at).toLocaleString() : "";
-        const el = document.createElement("button");
-        el.className = "w-full text-left py-4 hover:bg-green-50 px-2 rounded transition";
-        el.innerHTML = `
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <div class="font-semibold text-gray-900">${summary(item)}</div>
-              <div class="text-sm text-gray-600 mt-1">${item?.treatment ? String(item.treatment).slice(0, 80) + (String(item.treatment).length > 80 ? "…" : "") : "No treatment info"}</div>
-            </div>
-            <div class="text-xs text-gray-500 whitespace-nowrap">${created}</div>
-          </div>
-        `;
-        el.onclick = () => openModal(item);
-        listEl.appendChild(el);
-      }
+      rawRows = Array.isArray(data) ? data : [];
+      applyFiltersAndRender();
     }
 
     document.getElementById("refreshBtn").onclick = () => loadHistory().catch(e => Swal.fire("Error", String(e), "error"));
+    document.getElementById("filterPlant").addEventListener("input", applyFiltersAndRender);
+    document.getElementById("filterIllness").addEventListener("input", applyFiltersAndRender);
+    document.getElementById("sortBy").addEventListener("change", applyFiltersAndRender);
+    document.getElementById("clearFilters").addEventListener("click", () => {
+      document.getElementById("filterPlant").value = "";
+      document.getElementById("filterIllness").value = "";
+      document.getElementById("sortBy").value = "created_desc";
+      applyFiltersAndRender();
+    });
+
     document.getElementById("logoutBtn").onclick = () => {
       localStorage.removeItem("user_id");
       localStorage.removeItem("user_name");
@@ -144,6 +269,35 @@
     };
 
     loadHistory().catch(e => Swal.fire("Error", String(e), "error"));
+
+    const userDropdownBtn = document.getElementById("userDropdownBtn");
+    const userDropdown = document.getElementById("userDropdown");
+    const navEditProfile = document.getElementById("navEditProfile");
+    const navAbout = document.getElementById("navAbout");
+
+    userDropdownBtn?.addEventListener("click", () => { userDropdown.classList.toggle("hidden"); });
+    window.addEventListener("click", (e) => {
+      if (!userDropdown.contains(e.target) && !userDropdownBtn.contains(e.target)) {
+        userDropdown.classList.add("hidden");
+      }
+    });
+    navEditProfile?.addEventListener("click", () => { window.location.href = "/profile"; });
+    navAbout?.addEventListener("click", () => {
+      Swal.fire({
+        title: "About",
+        html: "Plant Disease Detector is a modern AI tool for farming and gardening.",
+        icon: "info",
+      });
+    });
+
+    const logoutFn = () => {
+      localStorage.removeItem("user_id");
+      localStorage.removeItem("user_name");
+      localStorage.removeItem("user_email");
+      localStorage.removeItem("is_admin");
+      window.location.href = "/";
+    };
+    document.querySelectorAll("#logoutBtn").forEach(btn => btn.addEventListener("click", logoutFn));
   </script>
 </body>
 </html>

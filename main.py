@@ -15,9 +15,18 @@ from postgrest.exceptions import APIError
 
 # AI/agent imports
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai import ImageUrl
 import base64
+
+# optional Groq model support, fallback to OpenAI
+try:
+    from pydantic_ai.models.groq import GroqModel
+except Exception:
+    GroqModel = None
+try:
+    from pydantic_ai.models.openai import OpenAIModel
+except Exception:
+    OpenAIModel = None
 
 # load environment variables from .env file
 load_dotenv()
@@ -90,9 +99,34 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
 
 # ---------------- AI AGENT ----------------
-# model choice and prompt replicated from app.py
-AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4o-mini")
-model_agent = OpenAIModel(AI_MODEL_NAME)
+AI_PROVIDER = (os.getenv("AI_PROVIDER") or "GROQ").strip().upper()
+AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "meta-llama/llama-4-scout-17b")
+AI_API_KEY = os.getenv("AI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# Support API key forwarding from common env var names.
+if not AI_API_KEY:
+    AI_API_KEY = OPENAI_API_KEY or GROQ_API_KEY
+
+if AI_PROVIDER == "GROQ":
+    if GroqModel is None:
+        raise RuntimeError("GroqModel unavailable. Install pydantic-ai-slim[groq] and restart.")
+    groq_key = GROQ_API_KEY or AI_API_KEY
+    if not groq_key:
+        raise RuntimeError("GROQ_API_KEY must be set for Groq provider.")
+    os.environ["GROQ_API_KEY"] = groq_key
+    model_agent = GroqModel(AI_MODEL_NAME)
+elif AI_PROVIDER == "OPENAI":
+    if OpenAIModel is None:
+        raise RuntimeError("OpenAIModel unavailable. Install openai and pydantic-ai.")
+    openai_key = OPENAI_API_KEY or AI_API_KEY
+    if not openai_key:
+        raise RuntimeError("OPENAI_API_KEY must be set for OpenAI provider.")
+    os.environ["OPENAI_API_KEY"] = openai_key
+    model_agent = OpenAIModel(AI_MODEL_NAME)
+else:
+    raise RuntimeError(f"Unsupported AI_PROVIDER: {AI_PROVIDER}. Use OPENAI or GROQ.")
 
 agent = Agent(
     model=model_agent,
@@ -101,26 +135,13 @@ You are an agricultural plant disease expert.
 
 Analyze the uploaded plant leaf image and identify the disease.
 
-Tasks:
-1. Identify the plant name.
-2. Identify the illness or disease affecting the plant.
-3. Provide a short treatment recommendation.
-4. Provide a short prevention method to avoid the disease.
+Return ONLY valid JSON with these keys: name, illness, treatment, prevention.
+Use short phrases and no extra text.
 
-If the plant is healthy, set:
-illness: "Healthy"
+If healthy, illness should be "Healthy".
 
-Return ONLY valid JSON in the following format:
-
-{
-"name": "plant name",
-"illness": "disease name or Healthy",
-"treatment": "recommended treatment",
-"prevention": "how to prevent the disease"
-}
-
-Do not include explanations, notes, or extra text.
-Only return JSON.
+Example:
+{"name":"tomato","illness":"early blight","treatment":"remove infected leaves and apply fungicide","prevention":"rotate crops and avoid overhead watering"}
 """
 
 )
@@ -278,15 +299,26 @@ def get_user_by_email(email: str):
 
 class UpdateProfileData(BaseModel):
     display_name: str | None = None
+    nickname: str | None = None
     email: str | None = None
+    address: str | None = None
+    password: str | None = None
+    profile_picture: str | None = None
 
 
 @app.get("/users/{user_id}")
 def get_user(user_id: str):
-    resp: Any = supabase.table("users").select("id,display_name,email").eq("id", user_id).single().execute()
+    resp: Any = supabase.table("users").select("*").eq("id", user_id).single().execute()
     if getattr(resp, "error", None):
         raise HTTPException(status_code=500, detail=str(resp.error))
-    return resp.data
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = dict(resp.data)
+    user.pop("password_hash", None)
+    # .nickname in DB may be optional; keep response stable
+    if "nickname" not in user:
+        user["nickname"] = user.get("display_name") or user.get("name")
+    return user
 
 
 @app.put("/users/{user_id}")
@@ -294,8 +326,16 @@ def update_user(user_id: str, data: UpdateProfileData):
     update: dict[str, Any] = {}
     if data.display_name is not None:
         update["display_name"] = data.display_name
+    if data.nickname is not None:
+        update["nickname"] = data.nickname
     if data.email is not None:
         update["email"] = data.email
+    if data.address is not None:
+        update["address"] = data.address
+    if data.password is not None:
+        update["password_hash"] = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+    if data.profile_picture is not None:
+        update["profile_picture"] = data.profile_picture
     if not update:
         return {"status": "ok"}
 
@@ -306,6 +346,17 @@ def update_user(user_id: str, data: UpdateProfileData):
         return {"status": "ok", "user": (resp.data[0] if getattr(resp, "data", None) else None)}
     except APIError as e:
         msg = str(e).lower()
+        if "relation \"users\" does not exist" in msg or "column \"nickname\"" in msg:
+            # fallback by retrying without nickname column if schema doesn't have it
+            if "nickname" in update:
+                update.pop("nickname", None)
+                try:
+                    resp: Any = supabase.table("users").update(update).eq("id", user_id).execute()
+                    if getattr(resp, "error", None):
+                        raise HTTPException(status_code=500, detail=str(resp.error))
+                    return {"status": "ok", "user": (resp.data[0] if getattr(resp, "data", None) else None)}
+                except Exception:
+                    pass
         if "duplicate key" in msg or "already exists" in msg or "unique" in msg:
             raise HTTPException(status_code=409, detail="Email already in use.")
         raise HTTPException(status_code=500, detail="Profile update failed.")
@@ -314,7 +365,7 @@ def update_user(user_id: str, data: UpdateProfileData):
 @app.get("/admin/users")
 def admin_users():
     # Minimal admin endpoint. In production, protect this with proper auth.
-    resp: Any = supabase.table("users").select("id,display_name,email,created_at").order("created_at", desc=True).execute()
+    resp: Any = supabase.table("users").select("*").execute()
     if getattr(resp, "error", None):
         raise HTTPException(status_code=500, detail=str(resp.error))
     return resp.data
@@ -323,7 +374,7 @@ def admin_users():
 @app.get("/admin/stats")
 def admin_stats():
     # Simple stats for graphs (counts by illness + daily detections).
-    resp: Any = supabase.table("detections").select("created_at,illness").order("created_at", desc=False).execute()
+    resp: Any = supabase.table("detections").select("*").execute()
     if getattr(resp, "error", None):
         raise HTTPException(status_code=500, detail=str(resp.error))
     rows = resp.data or []
@@ -331,7 +382,7 @@ def admin_stats():
     by_day: dict[str, int] = {}
     by_illness: dict[str, int] = {}
     for r in rows:
-        created_at = str(r.get("created_at") or "")
+        created_at = str(r.get("created_at") or r.get("inserted_at") or "")
         day = created_at[:10] if len(created_at) >= 10 else "unknown"
         by_day[day] = by_day.get(day, 0) + 1
         illness = str(r.get("illness") or "Unknown").strip() or "Unknown"
@@ -351,7 +402,6 @@ def history(user_id: str):
         resp: Any = supabase.table("detections") \
             .select("*") \
             .eq("user_id", user_id) \
-            .order("created_at", desc=True) \
             .execute()
         if getattr(resp, "error", None):
             _dbg("H7", "main.py:history", "history_supabase_error", {"error": str(resp.error)})
@@ -363,6 +413,20 @@ def history(user_id: str):
         msg = str(e)
         _dbg("H7", "main.py:history", "history_exception", {"error": msg})
         raise HTTPException(status_code=500, detail="Failed to fetch history: " + msg)
+
+
+@app.delete("/detections/{detection_id}")
+def delete_detection(detection_id: str):
+    try:
+        resp: Any = supabase.table("detections").delete().eq("id", detection_id).execute()
+        if getattr(resp, "error", None):
+            raise HTTPException(status_code=500, detail=str(resp.error))
+        # Return 204 or confirmation
+        return {"status": "deleted", "id": detection_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to delete detection: " + str(e))
 
 
 @app.post("/activity")
@@ -387,9 +451,16 @@ def get_config(key: str):
 
 @app.post("/detections")
 def add_detection(item: dict):
-    resp: Any = supabase.table("detections").insert(item).execute()
-    if resp.error:
-        raise HTTPException(status_code=500, detail=resp.error.message)
+    safe_columns = {"user_id", "image_url", "plant_name", "illness", "treatment", "prevention", "raw_result"}
+    payload = {k: item[k] for k in safe_columns if k in item}
+    if "user_id" not in payload or "image_url" not in payload or "plant_name" not in payload:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required fields for detection: user_id, image_url, plant_name",
+        )
+    resp: Any = _insert_detection(payload)
+    if getattr(resp, "error", None):
+        raise HTTPException(status_code=500, detail=str(resp.error))
     return resp.data
 
 
@@ -399,6 +470,38 @@ def set_config(item: dict):
     if resp.error:
         raise HTTPException(status_code=500, detail=resp.error.message)
     return {"status": "ok"}
+
+
+def _is_missing_column_error(error: Any) -> bool:
+    msg = str(error or "").lower()
+    return (
+        "does not exist" in msg
+        or "could not find the" in msg
+        or "pgrst204" in msg
+    )
+
+
+def _insert_detection(payload: dict) -> Any:
+    resp: Any = supabase.table("detections").insert(payload).execute()
+    if not getattr(resp, "error", None):
+        return resp
+
+    if _is_missing_column_error(getattr(resp, "error", None)):
+        # Retry with the core required columns only.
+        base_payload = {
+            "user_id": payload.get("user_id"),
+            "image_url": payload.get("image_url"),
+            "plant_name": payload.get("plant_name"),
+            "illness": payload.get("illness"),
+        }
+        base_payload = {k: v for k, v in base_payload.items() if v is not None}
+        if base_payload:
+            resp2: Any = supabase.table("detections").insert(base_payload).execute()
+            if not getattr(resp2, "error", None):
+                return resp2
+        return resp2
+
+    return resp
 
 
 # ---------------- AI PREDICT ----------------
@@ -419,17 +522,137 @@ async def predict(file: UploadFile = File(...)):
     return {"result": result.output}
 
 
+def _is_unknown_value(value: Any) -> bool:
+    if value is None:
+        return True
+    text = str(value).strip().lower()
+    return text in ("", "unknown", "none", "n/a", "not available", "not sure", "undetermined")
+
+
 def _normalize_ai_output(output: Any) -> dict[str, Any]:
+    # Accept dict output directly
     if isinstance(output, dict):
-        return output
-    if isinstance(output, str):
+        normalized = output
+    elif isinstance(output, str):
         try:
             parsed = json.loads(output)
             if isinstance(parsed, dict):
-                return parsed
+                normalized = parsed
+            else:
+                normalized = {"raw": output}
         except Exception:
-            pass
-    return {"raw": output}
+            # Try to extract JSON substring
+            start = output.find('{')
+            end = output.rfind('}')
+            if start != -1 and end != -1 and end > start:
+                try:
+                    parsed = json.loads(output[start:end+1])
+                    if isinstance(parsed, dict):
+                        normalized = parsed
+                    else:
+                        normalized = {"raw": output}
+                except Exception:
+                    normalized = {"raw": output}
+            else:
+                normalized = {"raw": output}
+    else:
+        normalized = {"raw": output}
+
+    # Enforce expected keys and defaults
+    name_val = str(normalized.get("name") or normalized.get("plant") or "unknown").strip()
+    illness_val = str(normalized.get("illness") or normalized.get("disease") or "unknown").strip()
+
+    if _is_unknown_value(name_val):
+        name_val = "Unknown plant"
+    if _is_unknown_value(illness_val):
+        illness_val = "Disease not identified"
+
+    final = {
+        "name": name_val,
+        "illness": illness_val,
+        "treatment": str(normalized.get("treatment") or "No treatment available").strip(),
+        "prevention": str(normalized.get("prevention") or "No prevention available").strip(),
+        "raw": normalized,
+    }
+    return final
+
+
+async def _ai_run_analysis(image_base64: str, prompt: str) -> Any:
+    agent_any: Any = agent
+    result = await agent_any.run(
+        prompt,
+        deps={"image": ImageUrl(url=image_base64)},
+    )
+    return getattr(result, "output", None)
+
+
+async def _ai_analyze(image_bytes: bytes, image_base64: str) -> dict[str, Any]:
+    # Strict prompt to avoid unknowns - force classification from known diseases
+    strict_prompt = """Analyze this plant leaf image and identify the specific plant and disease.
+    
+You MUST choose from these exact categories only:
+- Apple: Apple scab, Black rot, Cedar apple rust, healthy
+- Blueberry: healthy
+- Cherry: healthy, Powdery mildew
+- Corn: Cercospora leaf spot, Common rust, healthy, Northern Leaf Blight
+- Grape: Black rot, Esca (Black Measles), healthy, Leaf blight
+- Orange: Haunglongbing (Citrus greening)
+- Peach: Bacterial spot, healthy
+- Pepper: Bacterial spot, healthy
+- Potato: Early blight, healthy, Late blight
+- Raspberry: healthy
+- Soybean: healthy
+- Squash: Powdery mildew
+- Strawberry: healthy, Leaf scorch
+- Tomato: Bacterial spot, Early blight, healthy, Late blight, Leaf Mold, Septoria leaf spot, Spider mites, Target Spot, Tomato mosaic virus, Tomato Yellow Leaf Curl Virus
+
+Return ONLY valid JSON with keys: "name" (plant name), "illness" (specific disease or "healthy"), "treatment", "prevention".
+Do NOT return "unknown" or similar. Choose the closest match from the list above."""
+
+    try:
+        output = await _ai_run_analysis(image_base64, strict_prompt)
+        normalized = _normalize_ai_output(output)
+        
+        # Validate that we got valid results
+        if _is_unknown_value(normalized["name"]) or _is_unknown_value(normalized["illness"]):
+            # Fallback with even stricter prompt
+            fallback_prompt = """This is a plant leaf. Identify the exact plant type and disease state.
+            
+Choose ONE from these options:
+Tomato - Early blight
+Tomato - Late blight  
+Tomato - healthy
+Potato - Early blight
+Potato - Late blight
+Potato - healthy
+Apple - Apple scab
+Apple - Black rot
+Grape - Black rot
+Grape - healthy
+Corn - Common rust
+Corn - healthy
+Pepper - Bacterial spot
+Pepper - healthy
+Orange - Citrus greening
+Strawberry - Leaf scorch
+Strawberry - healthy
+
+Return JSON: {"name": "plant", "illness": "disease", "treatment": "specific treatment", "prevention": "prevention methods"}"""
+
+            output2 = await _ai_run_analysis(image_base64, fallback_prompt)
+            normalized2 = _normalize_ai_output(output2)
+            if not (_is_unknown_value(normalized2["name"]) and _is_unknown_value(normalized2["illness"])):
+                normalized = normalized2
+        
+        return normalized
+    except Exception as e:
+        print(f"AI analysis failed: {e}")
+        return {
+            "name": "Unknown plant",
+            "illness": "Disease not identified",
+            "treatment": "Consult a local agricultural expert",
+            "prevention": "Practice good plant hygiene",
+        }
 
 
 @app.post("/analyze")
@@ -439,26 +662,25 @@ async def analyze_and_save(user_id: str = Form(...), file: UploadFile = File(...
     image_base64 = f"data:{file.content_type};base64,{encoded_string}"
 
     try:
-        agent_any: Any = agent
-        result = await agent_any.run(
-            "Analyze this plant leaf image and identify the disease.",
-            deps={"image": ImageUrl(url=image_base64)},
-        )
-
-        output: Any = getattr(result, "output", None)
-        normalized = _normalize_ai_output(output)
+        normalized = await _ai_analyze(image_bytes, image_base64)
 
         detection_payload = {
             "user_id": user_id,
-            "image_filename": file.filename,
-            "name": normalized.get("name"),
-            "illness": normalized.get("illness"),
+            # persisted as a full data URI so it can be previewed later
+            "image_url": image_base64,
+            "plant_name": normalized.get("name") or (file.filename.rsplit('.', 1)[0] if file.filename else "Unknown plant"),
+            "illness": normalized.get("illness") or "Disease not identified",
+        }
+        full_fields = {
             "treatment": normalized.get("treatment"),
             "prevention": normalized.get("prevention"),
             "raw_result": normalized,
         }
+        # Insert optional fields only if table supports them.
+        for k, v in full_fields.items():
+            detection_payload[k] = v
 
-        resp: Any = supabase.table("detections").insert(detection_payload).execute()
+        resp: Any = _insert_detection(detection_payload)
         if getattr(resp, "error", None):
             _dbg("H8", "main.py:analyze", "supabase_insert_error", {"error": str(resp.error)})
             raise HTTPException(status_code=500, detail="Failed to save detection result")
